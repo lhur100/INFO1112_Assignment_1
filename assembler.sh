@@ -178,3 +178,81 @@ done
 if (( has_content == 0 )); then
     fail "usage: the file is empty – no .bin file is produced"
 fi
+
+# ------------------------------------------------ 3. line 1: n_values ---
+
+n_values=${lines[0]}
+
+if [[ $n_values == "0" ]]; then
+    # ---- QUIT program: the next line must be exactly QUIT,0,0 ----------
+    if [[ ${lines[1]} != "QUIT,0,0" ]]; then
+        fail "error: line 2: a program with 0 values must be exactly QUIT,0,0"
+    fi
+
+    echo "It is a QUIT program"
+    convert_instruction "${lines[1]}" 2
+
+elif [[ $n_values == "2" ]]; then
+    # ---- ADD/SUB program --------------------------------------------------
+    # Lines 2 and 3: two whole numbers in the range [0, 128).
+    for i in 1 2; do
+        value=${lines[i]}
+
+        if ! is_number "$value" || (( 10#$value >= 128 )); then
+            fail "error: line $(( i + 1 )): '$value' must be a whole number in the range [0, 128)"
+        fi
+
+        bits=$(dec_to_bin $(( 10#$value )) 8)
+        dataArray+=( "$(bin_to_hex "$bits")" )
+    done
+
+    # Lines 4 onwards: instructions, until QUIT,0,0.
+    count=0
+    found_quit=0
+
+    for (( i = 3; i < ${#lines[@]}; i++ )); do
+        text=${lines[i]}
+
+        convert_instruction "$text" $(( i + 1 ))
+        count=$(( count + 1 ))
+
+        if [[ $text == QUIT,* ]]; then
+            if [[ $text != "QUIT,0,0" ]]; then
+                fail "error: line $(( i + 1 )): QUIT must be written exactly as QUIT,0,0"
+            fi
+
+            found_quit=1
+            break                          # anything after QUIT is ignored
+        fi
+
+        if (( count >= MAX_INSTRUCTIONS )); then
+            fail "error: more than $MAX_INSTRUCTIONS instructions - the program does not fit in memory"
+        fi
+    done
+
+    if (( found_quit == 0 )); then
+        fail "error: the program does not end with QUIT,0,0"
+    fi
+
+    echo "It is an ADD/SUB program"
+
+else
+    fail "error: line 1: '$n_values' is not valid - it can only be 0 or 2"
+fi
+
+# ------------------------------------------------ 4. write the .bin file ---
+# Only reached when every line was valid, so a bad program never makes a .bin.
+
+printf "" > "$output"               # create (or empty) the .bin file
+
+for hex in "${dataArray[@]}"; do
+    printf "\x$hex" >> "$output"     # e.g. \x7f writes the single byte 0x7f
+done
+
+echo "The content of the .bin file is"
+
+for hex in "${dataArray[@]}"; do
+    echo "$hex"
+done
+
+exit 0
