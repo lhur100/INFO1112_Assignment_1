@@ -156,3 +156,25 @@ if [[ $input != *.vsc ]]; then
 fi
 
 output="${input%.vsc}.bin"          # add.vsc -> add.bin
+
+# ---------------------------------------------------- 2. read the file ---
+
+# Read every line into the array "lines".
+# "|| [[ -n $line ]]" keeps a last line that has no newline after it
+# (the supplied quit.vsc ends like that).
+lines=()
+while IFS= read -r line || [[ -n $line ]]; do
+    line=${line%$'\r'}              # remove a Windows line ending (\r)
+    lines+=( "$line" )
+done < "$input"
+
+# The file counts as empty if no line has a non-space character in it.
+has_content=0
+for line in "${lines[@]}"; do
+    if [[ $line =~ [^[:space:]] ]]; then
+        has_content=1
+    fi
+done
+if (( has_content == 0 )); then
+    fail "usage: the file is empty – no .bin file is produced"
+fi
